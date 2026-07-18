@@ -1,0 +1,16 @@
+# Python
+__pycache__/
+venv/
+*.pyc
+*.pyo
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Large Map Data
+osrm-data/
