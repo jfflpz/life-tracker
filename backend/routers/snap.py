@@ -17,7 +17,6 @@ async def snap_daily_track(track_date: date, db: AsyncSession = Depends(get_db))
     3. Saves the GeoJSON into daily_tracks.snapped_line.
     """
     
-    # 1. Fetch raw points from the database
     query = text("""
         SELECT ST_X(location::geometry) as lon, ST_Y(location::geometry) as lat
         FROM gps_points
@@ -32,17 +31,11 @@ async def snap_daily_track(track_date: date, db: AsyncSession = Depends(get_db))
         
     coordinates = [(row.lon, row.lat) for row in rows]
     
-    # 2. TODO: Call our OSRM service to get the snapped geometry
-    # geometry = await ...
     
     geometry = await match_route(coordinates)
     
-    # We convert the GeoJSON dictionary back to a JSON string so PostGIS can parse it
     geometry_json_str = json.dumps(geometry)
     
-    # 3. TODO: Write an UPDATE query to save the snapped line.
-    # We use ST_GeomFromGeoJSON(:geojson) to convert the JSON string into PostGIS geometry.
-    # Update the daily_tracks table where date = :track_date.
     
     update_query = text("UPDATE daily_tracks SET snapped_line = ST_GeomFromGeoJSON(:geojson) WHERE date = :track_date")
     await db.execute(update_query, {"geojson": geometry_json_str, "track_date": track_date})

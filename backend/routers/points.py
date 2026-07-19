@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import text
 from datetime import datetime, timezone
 import models, schemas
 from database import get_db
@@ -32,5 +33,25 @@ async def ingest_gps_batch(batch: schemas.GPSBatchCreate, db: AsyncSession = Dep
     db.add_all(db_points)
     await db.commit()
     
+    # After inserting points, update the daily_tracks table
+    # This automatically creates a track for the day and updates the raw line
+    # so we don't have to wait for a background job to do it before snapping
+    update_track_query = text("""
+        INSERT INTO daily_tracks (id, date, raw_line, point_count, total_distance_m)
+        SELECT 
+            gen_random_uuid(),
+            DATE(recorded_at),
+            ST_MakeLine(location::geometry ORDER BY recorded_at) as raw_line,
+            COUNT(*),
+            0.0 -- You can add ST_Length here later
+        FROM gps_points
+        WHERE DATE(recorded_at) = DATE(:now)
+        GROUP BY DATE(recorded_at)
+        ON CONFLICT (date) DO UPDATE SET
+            raw_line = EXCLUDED.raw_line,
+            point_count = EXCLUDED.point_count;
+    """)
+    await db.execute(update_track_query, {"now": now})
+    await db.commit()
     
     return {"message": f"Successfully ingested {len(db_points)} points."}
