@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';                                                                                                        
+import 'package:flutter/services.dart';
 import 'package:flutter_map/flutter_map.dart';                                                                                                 
 import 'package:latlong2/latlong.dart';
 import 'package:geolocator/geolocator.dart';
 import '../models/daily_track.dart';
+import 'package:permission_handler/permission_handler.dart';
 import '../services/api_client.dart';
 import '../services/database_helper.dart';                                                                                                           
                                                                                                                                                 
@@ -14,6 +16,7 @@ class MapScreen extends StatefulWidget {
 }                                                                                                                                              
                                                                                                                                                 
 class _MapScreenState extends State<MapScreen> {    
+    static const platform = MethodChannel('com.example.app/location');
 
     final ApiClient _apiClient = ApiClient();                                                                                                    
     DailyTrack? _dailyTrack; 
@@ -59,6 +62,12 @@ class _MapScreenState extends State<MapScreen> {
                                                                                                                                                 
     if (permission == LocationPermission.deniedForever) {                                                                                      
         return Future.error('Location permissions are permanently denied, we cannot request permissions.');                                      
+    }
+
+    // Explicitly request background location for Android 10+
+    final status = await Permission.locationAlways.request();
+    if (status.isDenied) {
+        print("Background location denied, tracking may stop when screen is off.");
     }                                                                                                                                          
                                                                                                                                                 
     Position position = await Geolocator.getCurrentPosition();                                                                                 
@@ -115,8 +124,47 @@ class _MapScreenState extends State<MapScreen> {
             ),
         floatingActionButton: Column(
           mainAxisAlignment: MainAxisAlignment.end,
+          crossAxisAlignment: CrossAxisAlignment.end,
           children: [
-            FloatingActionButton(
+            FloatingActionButton.extended(
+              heroTag: 'track_btn',
+              backgroundColor: Colors.orange,
+              onPressed: () async {
+                try {
+                  await platform.invokeMethod('startService');
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Background tracking started!')),
+                    );
+                  }
+                } catch (e) {
+                  print("Failed to start service: $e");
+                }
+              },
+              icon: const Icon(Icons.play_arrow),
+              label: const Text("Start Tracking"),
+            ),
+            const SizedBox(height: 16),
+            FloatingActionButton.extended(
+              heroTag: 'stop_track_btn',
+              backgroundColor: Colors.redAccent,
+              onPressed: () async {
+                try {
+                  await platform.invokeMethod('stopService');
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Tracking stopped.')),
+                    );
+                  }
+                } catch (e) {
+                  print("Failed to stop service: $e");
+                }
+              },
+              icon: const Icon(Icons.stop),
+              label: const Text("Stop Tracking"),
+            ),
+            const SizedBox(height: 16),
+            FloatingActionButton.extended(
               heroTag: 'record_btn',
               onPressed: () async {
                 if (_currentLocation != null) {
@@ -129,10 +177,11 @@ class _MapScreenState extends State<MapScreen> {
                   );
                 }
               },
-              child: const Icon(Icons.add_location),
+              icon: const Icon(Icons.add_location),
+              label: const Text("Record Manual Point"),
             ),
             const SizedBox(height: 16),
-            FloatingActionButton(
+            FloatingActionButton.extended(
               heroTag: 'sync_btn',
               backgroundColor: Colors.green,
               onPressed: () async {
@@ -157,7 +206,8 @@ class _MapScreenState extends State<MapScreen> {
                   );
                 }
               },
-              child: const Icon(Icons.cloud_upload),
+              icon: const Icon(Icons.cloud_upload),
+              label: const Text("Sync to Cloud"),
             ),
           ],
         ),

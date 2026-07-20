@@ -18,9 +18,11 @@ async def snap_daily_track(track_date: date, db: AsyncSession = Depends(get_db))
     """
     
     query = text("""
-        SELECT ST_X(location::geometry) as lon, ST_Y(location::geometry) as lat
+        SELECT DISTINCT ON (recorded_at) 
+            ST_X(location::geometry) as lon, 
+            ST_Y(location::geometry) as lat
         FROM gps_points
-        WHERE DATE(recorded_at) = :track_date
+        WHERE DATE(recorded_at AT TIME ZONE 'Asia/Manila') = :track_date
         ORDER BY recorded_at ASC
     """)
     result = await db.execute(query, {"track_date": track_date})
