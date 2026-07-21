@@ -15,8 +15,8 @@ class DatabaseHelper {
   }
 
   Future<Database> _initDB(String filePath) async {
-    final dbPath = await getApplicationDocumentsDirectory();
-    final path = join(dbPath.path, filePath);
+    final dbPath = await getDatabasesPath();
+    final path = join(dbPath, filePath);
 
     return await openDatabase(
       path,
@@ -38,7 +38,7 @@ class DatabaseHelper {
 
   Future<void> insertPoint(double lat, double lon) async {
     final db = await instance.database;
-    final now = DateTime.now().toIso8601String();
+    final now = DateTime.now().toUtc().toIso8601String();
     await db.insert('pending_points', {'lat': lat, 'lon': lon, 'recorded_at': now});
   }
 

@@ -40,16 +40,17 @@ async def ingest_gps_batch(batch: schemas.GPSBatchCreate, db: AsyncSession = Dep
         INSERT INTO daily_tracks (id, date, raw_line, point_count, total_distance_m)
         SELECT 
             gen_random_uuid(),
-            DATE(recorded_at),
+            DATE(recorded_at AT TIME ZONE 'Asia/Manila'),
             ST_MakeLine(location::geometry ORDER BY recorded_at) as raw_line,
             COUNT(*),
-            0.0 -- You can add ST_Length here later
+            ST_Length(ST_MakeLine(location::geometry ORDER BY recorded_at)::geography)
         FROM gps_points
-        WHERE DATE(recorded_at) = DATE(:now)
-        GROUP BY DATE(recorded_at)
+        WHERE DATE(recorded_at AT TIME ZONE 'Asia/Manila') = DATE(:now AT TIME ZONE 'Asia/Manila')
+        GROUP BY DATE(recorded_at AT TIME ZONE 'Asia/Manila')
         ON CONFLICT (date) DO UPDATE SET
             raw_line = EXCLUDED.raw_line,
-            point_count = EXCLUDED.point_count;
+            point_count = EXCLUDED.point_count,
+            total_distance_m = EXCLUDED.total_distance_m;
     """)
     await db.execute(update_track_query, {"now": now})
     await db.commit()
