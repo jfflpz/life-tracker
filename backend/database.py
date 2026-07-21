@@ -4,7 +4,7 @@ from sqlalchemy.orm import declarative_base, sessionmaker
 
 DATABASE_URL = os.getenv(
     "DATABASE_URL", 
-    "postgresql+asyncpg://geo_user:geo_pass@localhost:5432/life_tracker"
+    "postgresql+asyncpg://user:password@postgres:5432/life_tracker"
 )
 
 engine = create_async_engine(DATABASE_URL, echo=False)

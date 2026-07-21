@@ -1,12 +1,37 @@
-version: '3.8'
+  version: '3.8'                                                                                                                                 
+                                                                                                                                                  
+  services:                                                                                                                                      
+    osrm:                                                                                                                                        
+      image: osrm/osrm-backend                                                                                                                   
+      container_name: osrm_ph                                                                                                                    
+      restart: unless-stopped                                                                                                                    
+      volumes:                                                                                                                                   
+        - ./osrm-data:/data                                                                                                                      
+      ports:                                                                                                                                     
+        - "5000:5000"                                                                                                                            
+      command: osrm-routed --algorithm mld /data/philippines-latest.osrm                                                                         
 
-services:
-  osrm:
-    image: osrm/osrm-backend
-    container_name: osrm_ph
-    restart: unless-stopped
-    volumes:
-      - ./osrm-data:/data
-    ports:
-      - "5000:5000"
-    command: osrm-routed --algorithm mld /data/philippines-latest.osrm
+    postgres:
+      image: postgis/postgis:15-3.4
+      container_name: life_tracker_postgres
+      restart: unless-stopped
+      environment:
+        POSTGRES_USER: user
+        POSTGRES_PASSWORD: password
+        POSTGRES_DB: life_tracker
+      ports:
+        - "5432:5432"
+      volumes:
+        - postgres_data:/var/lib/postgresql/data
+
+    backend:
+      build: .
+      container_name: life_tracker_backend
+      ports:
+        - "8000:8000"
+      depends_on:
+        - postgres
+        - osrm
+
+  volumes:
+    postgres_data:
