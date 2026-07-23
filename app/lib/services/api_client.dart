@@ -1,13 +1,14 @@
 import 'package:dio/dio.dart';
+import 'package:flutter/foundation.dart';
 import '../models/daily_track.dart';
+import '../config/app_config.dart';
+import '../config/app_constants.dart';
 
 class ApiClient {
-  static const String baseUrl = 'http://192.168.100.57:8000/api/v1';
-
-  // 3-second timeout so sync fails fast when offline instead of hanging
+  // Uses timeouts from AppConstants
   final Dio _dio = Dio(BaseOptions(
-    connectTimeout: const Duration(seconds: 3),
-    receiveTimeout: const Duration(seconds: 10),
+    connectTimeout: const Duration(seconds: AppConstants.connectTimeoutSeconds),
+    receiveTimeout: const Duration(seconds: AppConstants.receiveTimeoutSeconds),
   ));
 
   /// Syncs pending GPS points to the backend and triggers road snapping.
@@ -20,23 +21,23 @@ class ApiClient {
       final formattedPoints = points.map((p) => {
         'recorded_at': p['recorded_at'],
         'location': [p['lon'], p['lat']],
-        'accuracy': 10.0,
+        'accuracy': AppConstants.defaultAccuracy,
       }).toList();
 
       // 1. Upload to the batch endpoint
       final batchResponse = await _dio.post(
-        '$baseUrl/points/batch',
+        '${AppConfig.baseUrl}/points/batch',
         data: {'points': formattedPoints},
       );
       if (batchResponse.statusCode != 200) return false;
 
       // 2. Tell the backend to snap today's route to the roads
       final today = DateTime.now().toIso8601String().split('T')[0];
-      await _dio.post('$baseUrl/snap/$today');
+      await _dio.post('${AppConfig.baseUrl}/snap/$today');
 
       return true;
     } catch (e) {
-      print('Sync error: $e');
+      debugPrint('Sync error: $e');
       return false;
     }
   }
@@ -44,7 +45,7 @@ class ApiClient {
   /// Fetches a daily track from the backend. Returns null if offline or no data.
   Future<DailyTrack?> getDailyTrack(String dateYYYYMMDD) async {
     try {
-      final response = await _dio.get('$baseUrl/daily/$dateYYYYMMDD');
+      final response = await _dio.get('${AppConfig.baseUrl}/daily/$dateYYYYMMDD');
 
       if (response.statusCode == 200) {
         return DailyTrack.fromJson(response.data);
@@ -52,7 +53,7 @@ class ApiClient {
       return null;
     } catch (e) {
       // Silently fail — this is expected when offline
-      print('Error fetching daily track: $e');
+      debugPrint('Error fetching daily track: $e');
       return null;
     }
   }

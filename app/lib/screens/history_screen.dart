@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import '../models/daily_track.dart';
 import '../services/api_client.dart';
+import '../config/app_constants.dart';
 
 class HistoryScreen extends StatefulWidget {
   final String dateYYYYMMDD;
@@ -27,12 +29,14 @@ class _HistoryScreenState extends State<HistoryScreen> {
   Future<void> _fetchTrack() async {
     
     _apiClient.getDailyTrack(widget.dateYYYYMMDD).then((track) {
+      if (!mounted) return;
       setState(() {
         _dailyTrack = track;
         _isLoading = false;
       });
     }).catchError((error) {
-      print('Error fetching daily track: $error');
+      debugPrint('Error fetching daily track: $error');
+      if (!mounted) return;
       setState(() {
         _isLoading = false;
       });
@@ -60,13 +64,13 @@ class _HistoryScreenState extends State<HistoryScreen> {
                   options: MapOptions(
                     initialCenter: _dailyTrack!.routePoints.isNotEmpty
                         ? _dailyTrack!.routePoints.first
-                        : const LatLng(14.778, 121.024),
-                    initialZoom: 15.0,
+                        : const LatLng(AppConstants.fallbackLat, AppConstants.fallbackLon),
+                    initialZoom: AppConstants.historyZoom,
                   ),
                   children: [
                     TileLayer(
-                      urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-                      userAgentPackageName: 'com.example.life_tracker',
+                      urlTemplate: AppConstants.tileServerUrl,
+                      userAgentPackageName: AppConstants.userAgentPackage,
                     ),
                     
                     PolylineLayer(
