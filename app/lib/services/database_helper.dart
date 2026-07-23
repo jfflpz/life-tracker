@@ -1,6 +1,6 @@
 import 'package:sqflite/sqflite.dart';
 import 'package:path/path.dart';
-import 'package:path_provider/path_provider.dart';
+import '../config/app_constants.dart';
 
 class DatabaseHelper {
   static final DatabaseHelper instance = DatabaseHelper._init();
@@ -10,7 +10,7 @@ class DatabaseHelper {
 
   Future<Database> get database async {
     if (_database != null) return _database!;
-    _database = await _initDB('life_tracker.db');
+    _database = await _initDB(AppConstants.databaseName);
     return _database!;
   }
 
@@ -27,7 +27,7 @@ class DatabaseHelper {
 
   Future _createDB(Database db, int version) async {
     await db.execute('''
-      CREATE TABLE pending_points (
+      CREATE TABLE ${AppConstants.pendingPointsTable} (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         lat REAL NOT NULL,
         lon REAL NOT NULL,
@@ -39,16 +39,16 @@ class DatabaseHelper {
   Future<void> insertPoint(double lat, double lon) async {
     final db = await instance.database;
     final now = DateTime.now().toUtc().toIso8601String();
-    await db.insert('pending_points', {'lat': lat, 'lon': lon, 'recorded_at': now});
+    await db.insert(AppConstants.pendingPointsTable, {'lat': lat, 'lon': lon, 'recorded_at': now});
   }
 
   Future<List<Map<String, dynamic>>> getPendingPoints() async {
     final db = await instance.database;
-    return await db.query('pending_points', orderBy: 'recorded_at ASC');
+    return await db.query(AppConstants.pendingPointsTable, orderBy: 'recorded_at ASC');
   }
   
   Future<void> clearPendingPoints() async {
     final db = await instance.database;
-    await db.delete('pending_points');
+    await db.delete(AppConstants.pendingPointsTable);
   }
 }
