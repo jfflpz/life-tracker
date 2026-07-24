@@ -1,9 +1,14 @@
 import httpx
+import asyncio
+import logging
 from typing import List, Tuple, Optional
 from core.config import settings
+from features.map_matching.simplify import preprocess_route
 
 OSRM_BASE_URL = settings.OSRM_BASE_URL
-OSRM_MAX_COORDS = 100
+OSRM_MAX_COORDS = 500
+
+logger = logging.getLogger(__name__)
 
 async def match_route(
     coordinates: List[Tuple[float, float]],
@@ -20,12 +25,17 @@ async def match_route(
     timestamps:  List of Unix epoch seconds (same length as coordinates)
     Returns the matched GeoJSON LineString geometry.
     """
-    if len(coordinates) > OSRM_MAX_COORDS:
-        coordinates, timestamps = _downsample_with_timestamps(
-            coordinates, timestamps, OSRM_MAX_COORDS
+    # 1. Preprocess: remove duplicates, stationary points, and simplify with RDP
+    coords_pre, times_pre = preprocess_route(coordinates, timestamps)
+
+    # 2. Hard limit downsample if still too large
+    if len(coords_pre) > OSRM_MAX_COORDS:
+        logger.warning(f"Route still has {len(coords_pre)} points after RDP. Hard downsampling to {OSRM_MAX_COORDS}.")
+        coords_pre, times_pre = _downsample_with_timestamps(
+            coords_pre, times_pre, OSRM_MAX_COORDS
         )
 
-    coords_string = ";".join([f"{lon},{lat}" for lon, lat in coordinates])
+    coords_string = ";".join([f"{lon},{lat}" for lon, lat in coords_pre])
 
     url = f"{OSRM_BASE_URL}/match/v1/driving/{coords_string}"
     params = {
@@ -35,29 +45,45 @@ async def match_route(
         "tidy": "true" # Clean up messy GPS clusters
     }
 
-    if timestamps and len(timestamps) == len(coordinates):
-        params["timestamps"] = ";".join(str(t) for t in timestamps)
+    if times_pre and len(times_pre) == len(coords_pre):
+        params["timestamps"] = ";".join(str(t) for t in times_pre)
 
-    params["radiuses"] = ";".join(["30"] * len(coordinates))
+    params["radiuses"] = ";".join(["30"] * len(coords_pre))
 
+    max_retries = 3
+    base_delay = 2.0
+    
     async with httpx.AsyncClient() as client:
-        response = await client.get(url, params=params, timeout=30.0)
-        if response.status_code != 200:
-            raise Exception(
-                f"OSRM match request failed with status {response.status_code}: {response.text}"
-            )
+        for attempt in range(max_retries):
+            try:
+                response = await client.get(url, params=params, timeout=30.0)
+                
+                if response.status_code != 200:
+                    # Not a transient error (e.g. 400 Bad Request, no match), don't retry
+                    raise Exception(
+                        f"OSRM match request failed with status {response.status_code}: {response.text}"
+                    )
 
-        response_data = response.json()
+                response_data = response.json()
 
-        if "matchings" not in response_data or not response_data["matchings"]:
-            raise Exception("No matching route found in OSRM response.")
+                if "matchings" not in response_data or not response_data["matchings"]:
+                    raise Exception("No matching route found in OSRM response.")
 
-        all_coords = []
-        for matching in response_data["matchings"]:
-            geom = matching["geometry"]
-            all_coords.extend(geom["coordinates"])
+                all_coords = []
+                for matching in response_data["matchings"]:
+                    geom = matching["geometry"]
+                    all_coords.extend(geom["coordinates"])
 
-        return {"type": "LineString", "coordinates": all_coords}
+                return {"type": "LineString", "coordinates": all_coords}
+                
+            except (httpx.RequestError, httpx.TimeoutException) as e:
+                # Transient network errors
+                if attempt == max_retries - 1:
+                    raise Exception(f"OSRM connection failed after {max_retries} attempts: {str(e)}")
+                
+                await asyncio.sleep(base_delay * (2 ** attempt))
+            
+        raise Exception("OSRM request failed.")
 
 
 def _downsample_with_timestamps(

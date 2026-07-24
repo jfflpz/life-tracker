@@ -9,7 +9,7 @@
         - ./osrm-data:/data                                                                                                                      
       ports:                                                                                                                                     
         - "5000:5000"                                                                                                                            
-      command: osrm-routed --algorithm mld /data/philippines-latest.osrm                                                                         
+      command: osrm-routed --algorithm mld --max-matching-size 500 /data/philippines-latest.osrm                                                                         
 
     postgres:
       image: postgis/postgis:15-3.4
