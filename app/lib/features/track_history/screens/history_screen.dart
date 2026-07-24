@@ -4,7 +4,10 @@ import 'package:latlong2/latlong.dart';
 import '../models/daily_track.dart';
 import '../models/timeline.dart';
 import '../widgets/timeline_panel.dart';
+import '../widgets/breadcrumb_layer.dart';
 import '../../../core/network/api_client.dart';
+import '../widgets/calendar/calendar_modal.dart';
+import '../widgets/animated_route_layer.dart';
 
 class HistoryScreen extends StatefulWidget {
   final String dateYYYYMMDD;
@@ -15,23 +18,41 @@ class HistoryScreen extends StatefulWidget {
   State<HistoryScreen> createState() => _HistoryScreenState();
 }
 
-class _HistoryScreenState extends State<HistoryScreen> {
+class _HistoryScreenState extends State<HistoryScreen> with TickerProviderStateMixin {
   final ApiClient _apiClient = ApiClient();
+  late String _currentDate;
   DailyTrack? _dailyTrack;
   TimelineResponse? _timeline;
   bool _isLoading = true;
 
+  late final AnimationController _animationController = AnimationController(
+    vsync: this,
+    duration: const Duration(seconds: 3),
+  );
+  late final CurvedAnimation _curvedAnimation = CurvedAnimation(
+    parent: _animationController,
+    curve: Curves.easeInOut,
+  );
+
   @override
   void initState() {
     super.initState();
+    _currentDate = widget.dateYYYYMMDD;
     _fetchTrack();
   }
 
   Future<void> _fetchTrack() async {
+    _animationController.stop();
+    _animationController.reset();
+
+    setState(() {
+      _isLoading = true;
+    });
+
     try {
       final results = await Future.wait([
-        _apiClient.getDailyTrack(widget.dateYYYYMMDD).catchError((_) => null),
-        _apiClient.getDailyTimeline(widget.dateYYYYMMDD).catchError((_) => null),
+        _apiClient.getDailyTrack(_currentDate).catchError((_) => null),
+        _apiClient.getDailyTimeline(_currentDate).catchError((_) => null),
       ]);
 
       if (!mounted) return;
@@ -44,6 +65,8 @@ class _HistoryScreenState extends State<HistoryScreen> {
         _timeline = timeline;
         _isLoading = false;
       });
+
+      _startAnimationIfNeeded();
     } catch (error) {
       if (!mounted) return;
       setState(() {
@@ -52,12 +75,69 @@ class _HistoryScreenState extends State<HistoryScreen> {
     }
   }
 
+  void _openCalendar() async {
+    final DateTime initialDate = DateTime.parse(_currentDate);
+    final DateTime? selectedDate = await CalendarModal.show(
+      context, 
+      initialDate: initialDate,
+    );
+    
+    if (selectedDate != null && mounted) {
+      final String dateStr = selectedDate.toIso8601String().split('T')[0];
+      if (dateStr != _currentDate) {
+        setState(() {
+          _currentDate = dateStr;
+        });
+        _fetchTrack();
+      }
+    }
+  }
+
+  void _startAnimationIfNeeded() {
+    if (_dailyTrack == null || _dailyTrack!.routePoints.isEmpty) return;
+    
+    final pointsCount = _dailyTrack!.routePoints.length;
+    if (pointsCount < 10) {
+      _animationController.value = 1.0;
+      return;
+    }
+
+    int durationSec = (pointsCount / 500).ceil();
+    durationSec = durationSec.clamp(2, 5);
+
+    _animationController.duration = Duration(seconds: durationSec);
+    _animationController.forward();
+  }
+
+  void _skipAnimation() {
+    _animationController.value = 1.0;
+  }
+
+  void _replayAnimation() {
+    _animationController.reset();
+    _animationController.forward();
+  }
+
+  @override
+  void dispose() {
+    _animationController.dispose();
+    _curvedAnimation.dispose();
+    super.dispose();
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text('History: ${widget.dateYYYYMMDD}'),
+        title: Text('History: $_currentDate'),
         backgroundColor: Theme.of(context).colorScheme.inversePrimary,
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.calendar_month),
+            onPressed: _openCalendar,
+            tooltip: 'Open Calendar',
+          ),
+        ],
       ),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
@@ -67,7 +147,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
                   child: _dailyTrack == null
                       ? Center(
                           child: Text(
-                            'No route recorded for ${widget.dateYYYYMMDD}',
+                            'No route recorded for $_currentDate',
                             style: const TextStyle(fontSize: 18),
                           ),
                         )
@@ -84,14 +164,13 @@ class _HistoryScreenState extends State<HistoryScreen> {
                               userAgentPackageName: 'com.example.life_tracker',
                               retinaMode: true,
                             ),
-                            PolylineLayer(
-                              polylines: [
-                                Polyline(
-                                  points: _dailyTrack!.routePoints,
-                                  color: Colors.blue,
-                                  strokeWidth: 4.0,
-                                ),
-                              ],
+                            AnimatedRouteLayer(
+                              routePoints: _dailyTrack!.routePoints,
+                              animation: _curvedAnimation,
+                            ),
+                            BreadcrumbLayer(
+                              routePoints: _dailyTrack!.routePoints,
+                              animation: _curvedAnimation,
                             ),
                             MarkerLayer(
                               markers: [
@@ -114,6 +193,34 @@ class _HistoryScreenState extends State<HistoryScreen> {
                           ],
                         ),
                 ),
+                if (_dailyTrack != null && _dailyTrack!.routePoints.length >= 10)
+                  Positioned(
+                    top: 16,
+                    right: 16,
+                    child: AnimatedBuilder(
+                      animation: _animationController,
+                      builder: (context, child) {
+                        final isAnimating = _animationController.isAnimating;
+                        final isCompleted = _animationController.isCompleted;
+
+                        if (isCompleted || !isAnimating) {
+                          return FloatingActionButton.small(
+                            heroTag: 'replay_btn',
+                            onPressed: _replayAnimation,
+                            tooltip: 'Replay Route',
+                            child: const Icon(Icons.replay),
+                          );
+                        } else {
+                          return FloatingActionButton.small(
+                            heroTag: 'skip_btn',
+                            onPressed: _skipAnimation,
+                            tooltip: 'Skip Animation',
+                            child: const Icon(Icons.fast_forward),
+                          );
+                        }
+                      },
+                    ),
+                  ),
                 if (_timeline != null)
                   DraggableScrollableSheet(
                     initialChildSize: 0.2,

@@ -2,7 +2,8 @@ import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 import '../../features/track_history/models/daily_track.dart';
 import '../../features/track_history/models/timeline.dart';
-                                                                                                                                                
+import '../../features/track_history/models/monthly_summary.dart';
+
 class ApiClient {                                                                                                                              
   static const String baseUrl = 'http://192.168.100.57:8000/api/v1';                                                                           
                                                                                                                                                 
@@ -118,6 +119,24 @@ class ApiClient {
       return null;
     } catch (e) {
       debugPrint('Unexpected error fetching timeline: $e');
+      return null;
+    }
+  }
+
+  Future<MonthlySummary?> getMonthlySummary(int year, int month) async {
+    try {
+      // API expects zero-padded month strings for paths or maybe ints, depending on backend implementation.
+      // But FastAPI handles integer path parameters nicely.
+      final response = await _dio.get('/daily/summary/$year/$month');
+      if (response.statusCode == 200) {
+        return MonthlySummary.fromJson(response.data);
+      }
+      return null;
+    } on DioException catch (e) {
+      _handleNetworkError(e, 'getMonthlySummary');
+      return null;
+    } catch (e) {
+      debugPrint('Unexpected error fetching monthly summary: $e');
       return null;
     }
   }

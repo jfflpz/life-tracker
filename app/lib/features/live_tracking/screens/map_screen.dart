@@ -8,6 +8,7 @@ import 'package:uuid/uuid.dart';
 import 'package:flutter/foundation.dart';
 
 import '../../track_history/screens/history_screen.dart';
+import '../../track_history/widgets/calendar/calendar_modal.dart';
 import '../../../core/network/api_client.dart';
 import '../../../core/local_db/database_helper.dart';
 import '../widgets/animated_location_layer.dart';
@@ -244,11 +245,9 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver, Tick
           IconButton(
             icon: const Icon(Icons.calendar_month),
             onPressed: () async {
-              final selectedDate = await showDatePicker(
-                context: context,
+              final selectedDate = await CalendarModal.show(
+                context,
                 initialDate: DateTime.now(),
-                firstDate: DateTime(2024),
-                lastDate: DateTime.now(),
               );
 
               if (selectedDate != null && context.mounted) {
