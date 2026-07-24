@@ -36,23 +36,29 @@ async def ingest_gps_batch(batch: schemas.GPSBatchCreate, db: AsyncSession = Dep
     # After inserting points, update the daily_tracks table
     # This automatically creates a track for the day and updates the raw line
     # so we don't have to wait for a background job to do it before snapping
-    update_track_query = text("""
-        INSERT INTO daily_tracks (id, date, raw_line, point_count, total_distance_m)
-        SELECT 
-            gen_random_uuid(),
-            DATE(recorded_at AT TIME ZONE 'Asia/Manila'),
-            ST_MakeLine(location::geometry ORDER BY recorded_at) as raw_line,
-            COUNT(*),
-            ST_Length(ST_MakeLine(location::geometry ORDER BY recorded_at)::geography)
-        FROM gps_points
-        WHERE DATE(recorded_at AT TIME ZONE 'Asia/Manila') = DATE(:now AT TIME ZONE 'Asia/Manila')
-        GROUP BY DATE(recorded_at AT TIME ZONE 'Asia/Manila')
-        ON CONFLICT (date) DO UPDATE SET
-            raw_line = EXCLUDED.raw_line,
-            point_count = EXCLUDED.point_count,
-            total_distance_m = EXCLUDED.total_distance_m;
-    """)
-    await db.execute(update_track_query, {"now": now})
-    await db.commit()
+    import zoneinfo
+    manila_tz = zoneinfo.ZoneInfo('Asia/Manila')
+    affected_dates = list({point.recorded_at.astimezone(manila_tz).date() for point in batch.points})
+    
+    if affected_dates:
+        update_track_query = text("""
+            INSERT INTO daily_tracks (id, date, raw_line, point_count, total_distance_m)
+            SELECT 
+                gen_random_uuid(),
+                DATE(recorded_at AT TIME ZONE 'Asia/Manila'),
+                ST_MakeLine(location::geometry ORDER BY recorded_at) as raw_line,
+                COUNT(*),
+                ST_Length(ST_MakeLine(location::geometry ORDER BY recorded_at)::geography)
+            FROM gps_points
+            WHERE DATE(recorded_at AT TIME ZONE 'Asia/Manila') = ANY(:affected_dates)
+            GROUP BY DATE(recorded_at AT TIME ZONE 'Asia/Manila')
+            ON CONFLICT (date) DO UPDATE SET
+                raw_line = EXCLUDED.raw_line,
+                point_count = EXCLUDED.point_count,
+                total_distance_m = EXCLUDED.total_distance_m,
+                timeline_json = NULL;
+        """)
+        await db.execute(update_track_query, {"affected_dates": affected_dates})
+        await db.commit()
     
     return {"message": f"Successfully ingested {len(db_points)} points."}

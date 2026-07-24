@@ -41,3 +41,14 @@ async def get_daily_track(track_date: date, db: AsyncSession = Depends(get_db)):
         "type": "FeatureCollection",
         "features": [feature]
     }
+
+@router.get("/daily/{track_date}/timeline")
+async def get_daily_timeline(track_date: date, db: AsyncSession = Depends(get_db)):
+    """
+    Returns the chronological timeline of events (Stops and Moving) for a specific date.
+    Calculates summary statistics and caches them in the daily_tracks table.
+    """
+    from backend.features.tracking.timeline_service import TimelineService
+    service = TimelineService(db)
+    return await service.get_timeline_for_date(track_date)
+

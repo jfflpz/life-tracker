@@ -11,7 +11,9 @@ import '../../track_history/screens/history_screen.dart';
 import '../../../core/network/api_client.dart';
 import '../../../core/local_db/database_helper.dart';
 import '../widgets/animated_location_layer.dart';
-import '../widgets/map_action_buttons.dart';
+import '../widgets/modern_map_controls.dart';
+import '../widgets/premium_bottom_panel.dart';
+
 
 class MapScreen extends StatefulWidget {
   const MapScreen({super.key});
@@ -121,7 +123,7 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver, Tick
       _locationNotifier.value = LocationState(                                                                                                 
         point: newPoint,                                                                                                                       
         heading: position.heading,                                                                                                             
-        accuracy: position.accuracy,                                                                                                           
+        accuracy: position.accuracy,
       );                                                                                                                                       
                                                                                                                                                 
       if (_isTrackingNotifier.value) {
@@ -191,6 +193,12 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver, Tick
         title: const Text('Life Tracker'),
         backgroundColor: Theme.of(context).colorScheme.inversePrimary,
         actions: [
+          IconButton(
+            icon: const Icon(Icons.settings),
+            onPressed: () {
+              // Settings screen deleted during rollback.
+            },
+          ),
           if (kDebugMode)
             IconButton(
               icon: const Icon(Icons.bug_report),
@@ -258,7 +266,9 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver, Tick
       ),
       body: !_hasInitialLocation
           ? const Center(child: CircularProgressIndicator())
-          : FlutterMap(
+          : Stack(
+              children: [
+                FlutterMap(
               mapController: _mapController,
               options: MapOptions(
                 initialCenter: _locationNotifier.value!.point,
@@ -291,20 +301,33 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver, Tick
               ),
               children: [
                 TileLayer(
-                  urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                  urlTemplate: 'https://basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',
                   userAgentPackageName: 'com.example.life_tracker',
+                  retinaMode: true,
                 ),
                 ValueListenableBuilder<List<LatLng>>(                                                                                          
                   valueListenable: _archivedPointsNotifier,                                                                                        
                   builder: (context, archivedPoints, child) {                                                                                      
                     return PolylineLayer(                                                                                                      
                       polylines: [                                                                                                             
-                        if (archivedPoints.length >= 2)                                                                                            
+                        if (archivedPoints.length >= 2) ...[
+                          // Subtle shadow
                           Polyline(
                             points: archivedPoints,
-                            color: Colors.orange.withValues(alpha: 0.3),
-                            strokeWidth: 4.0,
+                            color: Colors.black.withValues(alpha: 0.2),
+                            strokeWidth: 10.0,
+                            strokeJoin: StrokeJoin.round,
+                            strokeCap: StrokeCap.round,
                           ),
+                          // Main vibrant blue road-snapped route
+                          Polyline(
+                            points: archivedPoints,
+                            color: Colors.blueAccent.shade700,
+                            strokeWidth: 6.0,
+                            strokeJoin: StrokeJoin.round,
+                            strokeCap: StrokeCap.round,
+                          ),
+                        ]
                       ],
                     );
                   },
@@ -314,12 +337,14 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver, Tick
                   builder: (context, livePoints, child) {                                                                                      
                     return PolylineLayer(                                                                                                      
                       polylines: [                                                                                                             
-                        // 2. The Current Active Session Line                                                                                         
+                        // The Current Active Session Line                                                                                         
                         if (livePoints.length >= 2)                                                                                            
                           Polyline(
                             points: livePoints,
-                            color: Colors.orange,
-                            strokeWidth: 4.0,
+                            color: Colors.deepOrangeAccent.withValues(alpha: 0.8),
+                            strokeWidth: 5.0,
+                            strokeJoin: StrokeJoin.round,
+                            strokeCap: StrokeCap.round,
                           ),
                       ],
                     );
@@ -374,20 +399,58 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver, Tick
                 ),
               ],
             ),
-      floatingActionButton: MapActionButtons(
-        isTrackingNotifier: _isTrackingNotifier,
-        onStopTracking: () async {
-          _isTrackingNotifier.value = false;
-          await _loadLivePoints();
-        },
-        onStartTracking: () {
-          _isTrackingNotifier.value = true;
-        },
-        onSyncComplete: () async {
-          _livePointsNotifier.value = [];
-          await _loadLivePoints();
-        },
-      ),
+            
+            // Map Controls (Right Side)
+            Positioned(
+              right: 0,
+              bottom: 180, // Spaced to sit nicely above the PremiumBottomPanel
+              child: SafeArea(
+                child: ModernMapControls(
+                  isTrackingNotifier: _isTrackingNotifier,
+                  onStopTracking: () async {
+                    _isTrackingNotifier.value = false;
+                    await _loadLivePoints();
+                  },
+                  onStartTracking: () {
+                    _isTrackingNotifier.value = true;
+                  },
+                  onSyncComplete: () async {
+                    _livePointsNotifier.value = [];
+                    await _loadLivePoints();
+                  },
+                  onCenterLocation: () {
+                    if (_locationNotifier.value != null) {
+                      _animatedMapMove(_locationNotifier.value!.point, 16.0);
+                    }
+                  },
+                ),
+              ),
+            ),
+            
+            // Premium Bottom Panel
+            Positioned(
+              left: 0,
+              right: 0,
+              bottom: 0,
+              child: SafeArea(
+                child: ValueListenableBuilder<LocationState?>(
+                  valueListenable: _locationNotifier,
+                  builder: (context, locationState, child) {
+                    return ValueListenableBuilder<bool>(
+                      valueListenable: _isTrackingNotifier,
+                      builder: (context, isTracking, child) {
+                        return PremiumBottomPanel(
+                          locationState: locationState,
+                          isTracking: isTracking,
+                        );
+                      }
+                    );
+                  }
+                ),
+              ),
+            ),
+          ],
+        ),
     );
   }
 }

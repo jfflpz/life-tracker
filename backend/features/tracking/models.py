@@ -1,6 +1,6 @@
 import uuid                                                                                                                                    
-from sqlalchemy import Column, String, Float, DateTime, Integer, Date                                                                          
-from sqlalchemy.dialects.postgresql import UUID                                                                                                
+from sqlalchemy import Column, String, Float, DateTime, Integer, Date
+from sqlalchemy.dialects.postgresql import UUID, JSONB
 from geoalchemy2 import Geometry                                                                                                               
 from core.database import Base                                                                                                                      
                                                                                                                                                 
@@ -30,6 +30,8 @@ class DailyTrack(Base):
     
     total_distance_m = Column(Float, default=0.0)
     point_count = Column(Integer, default=0)
+    
+    timeline_json = Column(JSONB, nullable=True)
 
 class PinnedLocation(Base):
     __tablename__ = "pinned_locations"

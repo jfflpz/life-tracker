@@ -91,9 +91,9 @@ class _AnimatedLocationLayerState extends State<AnimatedLocationLayer> {
                   point: animatedState.point,
                   radius: animatedState.accuracy,
                   useRadiusInMeter: true,
-                  color: Colors.blue.withValues(alpha: 0.15),
-                  borderColor: Colors.blue.withValues(alpha: 0.3),
-                  borderStrokeWidth: 1.5,
+                  color: Colors.blueAccent.withValues(alpha: 0.08),
+                  borderColor: Colors.blueAccent.withValues(alpha: 0.2),
+                  borderStrokeWidth: 0.5,
                 ),
               ],
             ),
@@ -126,36 +126,28 @@ class NavigationMarkerWidget extends StatelessWidget {
     return Stack(
       alignment: Alignment.center,
       children: [
-        // Faint Navigation Cone / Sector
+        // Heading Pointer (small triangle on top of the dot)
         Positioned(
           top: 0,
           child: CustomPaint(
-            size: const Size(40, 30),
-            painter: _ConePainter(),
-          ),
-        ),
-        // Sharp Navigation Arrow (Teardrop)
-        Positioned(
-          top: 8,
-          child: CustomPaint(
-            size: const Size(16, 20),
-            painter: _ArrowPainter(),
+            size: const Size(14, 18),
+            painter: _PointerPainter(),
           ),
         ),
         // Main Blue Dot
         Container(
-          width: 22,
-          height: 22,
+          width: 24,
+          height: 24,
           decoration: BoxDecoration(
             color: Colors.blueAccent.shade700,
             shape: BoxShape.circle,
-            border: Border.all(color: Colors.white, width: 3),
+            border: Border.all(color: Colors.white, width: 3.5),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withValues(alpha: 0.2),
-                blurRadius: 6,
-                spreadRadius: 1,
-                offset: const Offset(0, 3),
+                color: Colors.black.withValues(alpha: 0.25),
+                blurRadius: 8,
+                spreadRadius: 0,
+                offset: const Offset(0, 4),
               ),
             ],
           ),
@@ -165,13 +157,13 @@ class NavigationMarkerWidget extends StatelessWidget {
   }
 }
 
-class _ArrowPainter extends CustomPainter {
+class _PointerPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     final path = Path();
     path.moveTo(size.width / 2, 0); // Top point
     path.lineTo(size.width, size.height); // Bottom right
-    path.lineTo(size.width / 2, size.height * 0.7); // Inner bottom indent
+    path.lineTo(size.width / 2, size.height * 0.8); // Inner bottom indent
     path.lineTo(0, size.height); // Bottom left
     path.close();
 
@@ -181,35 +173,15 @@ class _ArrowPainter extends CustomPainter {
         ..color = Colors.blueAccent.shade700
         ..style = PaintingStyle.fill,
     );
-  }
-
-  @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
-}
-
-class _ConePainter extends CustomPainter {
-  @override
-  void paint(Canvas canvas, Size size) {
-    final path = Path();
-    path.moveTo(size.width / 2, size.height); // Bottom center (origin of dot)
-    path.lineTo(size.width, 0); // Top right
     
-    // Slight curve at the top for the cone
-    path.quadraticBezierTo(size.width / 2, -10, 0, 0); // Top left via curve
-    path.close();
-
+    // Add white stroke around the pointer to match the dot's border
     canvas.drawPath(
       path,
       Paint()
-        ..shader = LinearGradient(
-          begin: Alignment.bottomCenter,
-          end: Alignment.topCenter,
-          colors: [
-            Colors.blue.withValues(alpha: 0.4),
-            Colors.blue.withValues(alpha: 0.0),
-          ],
-        ).createShader(Rect.fromLTWH(0, 0, size.width, size.height))
-        ..style = PaintingStyle.fill,
+        ..color = Colors.white
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 2.0
+        ..strokeJoin = StrokeJoin.round,
     );
   }
 

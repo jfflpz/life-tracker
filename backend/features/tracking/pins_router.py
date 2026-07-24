@@ -25,6 +25,10 @@ async def create_pin(pin: schemas.PinnedLocationCreate, db: AsyncSession = Depen
         "location": pin_wkt,
         "radius_m": pin.radius_m
     })
+    
+    # Invalidate all timeline caches because a new pin could match past stops
+    await db.execute(text("UPDATE daily_tracks SET timeline_json = NULL"))
+    
     await db.commit()
     row = result.fetchone()
     
@@ -60,6 +64,8 @@ async def get_all_pins(db: AsyncSession = Depends(get_db)):
 async def delete_pin(pin_id: str, db: AsyncSession = Depends(get_db)):
     query = text("DELETE FROM pinned_locations WHERE id = :id")
     await db.execute(query, {"id": pin_id})
+    # Invalidate all timeline caches because past stops may have used this pin
+    await db.execute(text("UPDATE daily_tracks SET timeline_json = NULL"))
     await db.commit()
     return {"message": "Deleted successfully"}
 

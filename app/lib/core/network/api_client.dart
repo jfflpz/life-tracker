@@ -1,6 +1,7 @@
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 import '../../features/track_history/models/daily_track.dart';
+import '../../features/track_history/models/timeline.dart';
                                                                                                                                                 
 class ApiClient {                                                                                                                              
   static const String baseUrl = 'http://192.168.100.57:8000/api/v1';                                                                           
@@ -102,6 +103,22 @@ class ApiClient {
     } catch (e) {
       debugPrint('Error creating pin: $e');
       return false;
+    }
+  }
+
+  Future<TimelineResponse?> getDailyTimeline(String dateYYYYMMDD) async {
+    try {
+      final response = await _dio.get('/daily/$dateYYYYMMDD/timeline');
+      if (response.statusCode == 200) {
+        return TimelineResponse.fromJson(response.data);
+      }
+      return null;
+    } on DioException catch (e) {
+      _handleNetworkError(e, 'getDailyTimeline');
+      return null;
+    } catch (e) {
+      debugPrint('Unexpected error fetching timeline: $e');
+      return null;
     }
   }
 
