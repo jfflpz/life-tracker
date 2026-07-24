@@ -25,24 +25,21 @@ class TimelinePanel extends StatelessWidget {
       );
     }
 
-    return SafeArea(
-      child: Column(
-        children: [
-          TimelineSummaryCard(
+    return ListView.builder(
+      padding: EdgeInsets.only(
+        bottom: MediaQuery.paddingOf(context).bottom + 16.0,
+      ),
+      itemCount: timeline.events.length + 1,
+      itemBuilder: (context, index) {
+        if (index == 0) {
+          return TimelineSummaryCard(
             summary: timeline.summary,
             pointCount: timeline.metadata.pointCount,
-          ),
-          Expanded(
-            child: ListView.builder(
-              itemCount: timeline.events.length,
-              itemBuilder: (context, index) {
-                final event = timeline.events[index];
-                return TimelineEventTile(event: event);
-              },
-            ),
-          ),
-        ],
-      ),
+          );
+        }
+        final event = timeline.events[index - 1];
+        return TimelineEventTile(event: event);
+      },
     );
   }
 }
