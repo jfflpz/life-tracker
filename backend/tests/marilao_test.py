@@ -3,7 +3,7 @@ import json
 import httpx
 from sqlalchemy.ext.asyncio import create_async_engine
 from sqlalchemy import text
-from database import DATABASE_URL
+from backend.core.database import DATABASE_URL
 
 async def main():
     engine = create_async_engine(DATABASE_URL, echo=False)

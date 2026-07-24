@@ -1,9 +1,9 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import text
+from features.tracking import schemas, models
+from core.database import get_db
 from datetime import date
-from backend.core.database import get_db
-import backend.features.tracking.schemas as schemas
 import json
 
 router = APIRouter(tags=["Pins"])
@@ -14,8 +14,8 @@ async def create_pin(pin: schemas.PinnedLocationCreate, db: AsyncSession = Depen
     pin_wkt = f"SRID=4326;POINT({lon} {lat})"
     
     query = text("""
-        INSERT INTO pinned_locations (label, icon, location, radius_m)
-        VALUES (:label, :icon, :location::geometry, :radius_m)
+        INSERT INTO pinned_locations (id, label, icon, location, radius_m)
+        VALUES (gen_random_uuid(), :label, :icon, ST_GeomFromEWKT(:location), :radius_m)
         RETURNING id, label, icon, radius_m
     """)
     
@@ -36,6 +36,32 @@ async def create_pin(pin: schemas.PinnedLocationCreate, db: AsyncSession = Depen
         "radius_m": row.radius_m
     }
 
+
+@router.get("/pins")
+async def get_all_pins(db: AsyncSession = Depends(get_db)):
+    query = text("""
+        SELECT id, label, icon, radius_m, ST_X(location::geometry) as lon, ST_Y(location::geometry) as lat
+        FROM pinned_locations
+    """)
+    result = await db.execute(query)
+    rows = result.fetchall()
+    
+    return [
+        {
+            "id": row.id,
+            "label": row.label,
+            "icon": row.icon,
+            "location": [row.lon, row.lat],
+            "radius_m": row.radius_m
+        } for row in rows
+    ]
+
+@router.delete("/pins/{pin_id}")
+async def delete_pin(pin_id: str, db: AsyncSession = Depends(get_db)):
+    query = text("DELETE FROM pinned_locations WHERE id = :id")
+    await db.execute(query, {"id": pin_id})
+    await db.commit()
+    return {"message": "Deleted successfully"}
 
 @router.get("/pins/visits/{visit_date}")
 async def get_visited_pins(visit_date: date, db: AsyncSession = Depends(get_db)):

@@ -4,8 +4,8 @@ from sqlalchemy import text
 from datetime import date
 import json
 
-from backend.core.database import get_db
-from services.osrm import match_route
+from core.database import get_db
+from features.map_matching.osrm_service import match_route
 
 router = APIRouter(tags=["Snap"])
 

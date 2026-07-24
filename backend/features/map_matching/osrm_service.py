@@ -1,9 +1,9 @@
 import httpx
 from typing import List, Tuple, Optional
+from core.config import settings
 
-OSRM_BASE_URL = "http://osrm_ph:5000"
-OSRM_MAX_COORDS = 100  # Keep well under OSRM's limit for reliability
-
+OSRM_BASE_URL = settings.OSRM_BASE_URL
+OSRM_MAX_COORDS = 100
 
 async def match_route(
     coordinates: List[Tuple[float, float]],
@@ -20,7 +20,6 @@ async def match_route(
     timestamps:  List of Unix epoch seconds (same length as coordinates)
     Returns the matched GeoJSON LineString geometry.
     """
-    # Downsample if we have too many points for OSRM
     if len(coordinates) > OSRM_MAX_COORDS:
         coordinates, timestamps = _downsample_with_timestamps(
             coordinates, timestamps, OSRM_MAX_COORDS
@@ -32,18 +31,14 @@ async def match_route(
     params = {
         "overview": "full",
         "geometries": "geojson",
-        # Allow OSRM to skip points that don't match any road (e.g. inside a park)
-        # rather than failing the entire request
-        "gaps": "ignore",
+        "gaps": "ignore", # Route along roads even if there are gaps, so lines never cross buildings
+        "tidy": "true" # Clean up messy GPS clusters
     }
 
-    # Add timestamps so OSRM understands the temporal sequence
     if timestamps and len(timestamps) == len(coordinates):
         params["timestamps"] = ";".join(str(t) for t in timestamps)
 
-    # Set GPS accuracy radius (meters) — tells OSRM how far to search for matching roads
-    # 15m is reasonable for phone GPS
-    params["radiuses"] = ";".join(["15"] * len(coordinates))
+    params["radiuses"] = ";".join(["30"] * len(coordinates))
 
     async with httpx.AsyncClient() as client:
         response = await client.get(url, params=params, timeout=30.0)
@@ -54,12 +49,9 @@ async def match_route(
 
         response_data = response.json()
 
-        # The match endpoint returns "matchings" instead of "routes"
         if "matchings" not in response_data or not response_data["matchings"]:
             raise Exception("No matching route found in OSRM response.")
 
-        # If there are multiple matched segments (gaps in GPS data),
-        # merge all their coordinates into one LineString
         all_coords = []
         for matching in response_data["matchings"]:
             geom = matching["geometry"]
@@ -81,7 +73,6 @@ def _downsample_with_timestamps(
     if len(coords) <= max_points:
         return coords, timestamps
 
-    # Always include first and last, evenly pick the rest from the middle
     indices = [0]
     step = (len(coords) - 1) / (max_points - 1)
     for i in range(1, max_points - 1):

@@ -5,3 +5,4 @@ asyncpg
 geoalchemy2
 pydantic
 httpx
+pydantic-settings

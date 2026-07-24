@@ -2,8 +2,8 @@ from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import text
 from datetime import datetime, timezone
-import backend.features.tracking.models as models, backend.features.tracking.schemas as schemas
-from backend.core.database import get_db
+from features.tracking import models, schemas
+from core.database import get_db
 
 router = APIRouter(tags=["Points"])
 

@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import text
 from datetime import date
-from backend.core.database import get_db
+from core.database import get_db
 
 router = APIRouter(tags=["Daily Tracks"])
 

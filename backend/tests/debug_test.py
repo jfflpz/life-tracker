@@ -1,9 +1,9 @@
 import asyncio
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
 from sqlalchemy.orm import sessionmaker
-from database import DATABASE_URL
-import schemas
-import models
+from backend.core.database import DATABASE_URL
+import backend.features.tracking.schemas as schemas
+import backend.features.tracking.models as models
 from routers.points import ingest_gps_batch
 import datetime
 

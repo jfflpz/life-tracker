@@ -1,6 +1,6 @@
 import asyncio
-from database import engine, Base
-import models
+from backend.core.database import engine, Base
+import backend.features.tracking.models as models
 
 async def init_db():
     async with engine.begin() as conn:

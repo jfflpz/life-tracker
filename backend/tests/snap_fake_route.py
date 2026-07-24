@@ -2,7 +2,7 @@ import asyncio
 import json
 from sqlalchemy.ext.asyncio import create_async_engine
 from sqlalchemy import text
-from database import DATABASE_URL
+from backend.core.database import DATABASE_URL
 from services.osrm import match_route
 
 async def main():

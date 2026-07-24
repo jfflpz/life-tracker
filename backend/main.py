@@ -1,6 +1,8 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from routers import points, daily, pins, snap
+from features.tracking import router as points, pins_router as pins
+from features.history import router as daily
+from features.map_matching import router as snap
 
 app = FastAPI(title="Life Tracker API")
 

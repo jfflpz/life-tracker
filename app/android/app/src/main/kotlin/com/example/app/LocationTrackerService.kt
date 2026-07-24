@@ -12,14 +12,23 @@ import androidx.core.app.NotificationCompat
 import com.google.android.gms.location.*
 import java.text.SimpleDateFormat
 import java.util.*
+import android.content.ContentValues                                                                                                           
+import android.util.Log
+import java.util.concurrent.ExecutorService
+import java.util.concurrent.Executors
+
 
 class LocationTrackerService : Service() {
     private lateinit var fusedLocationClient: FusedLocationProviderClient
     private lateinit var locationCallback: LocationCallback
+    private var db: SQLiteDatabase? = null                                                                                                     
+    private val dbExecutor: ExecutorService = Executors.newSingleThreadExecutor()
+    private var activeSessionId: String? = null
 
     override fun onCreate() {
         super.onCreate()
         fusedLocationClient = LocationServices.getFusedLocationProviderClient(this)
+        openDatabase()
         
         locationCallback = object : LocationCallback() {
             override fun onLocationResult(locationResult: LocationResult) {
@@ -31,21 +40,25 @@ class LocationTrackerService : Service() {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        activeSessionId = intent?.getStringExtra("sessionId") ?: activeSessionId
+        
         createNotificationChannel()
         val notification = NotificationCompat.Builder(this, "LocationServiceChannel")
             .setContentTitle("Life Tracker")
-            .setContentText("Recording your route in the background...")
+            .setContentText("Recording your route in the Background.")
             .setSmallIcon(android.R.drawable.ic_menu_mylocation)
             .build()
             
         startForeground(1, notification)
         startLocationUpdates()
-        return START_STICKY
+        return START_REDELIVER_INTENT
     }
 
     private fun startLocationUpdates() {
-        val locationRequest = LocationRequest.Builder(Priority.PRIORITY_HIGH_ACCURACY, 10000) // 10 seconds
-            .setMinUpdateDistanceMeters(5f) // Record if moved 5 meters
+        // Optimized for battery using hardware batching
+        val locationRequest = LocationRequest.Builder(Priority.PRIORITY_HIGH_ACCURACY, 15000) 
+            .setMinUpdateDistanceMeters(5f)
+            .setMaxUpdateDelayMillis(30000) // Hardware batching up to 30 seconds
             .build()
             
         try {
@@ -56,39 +69,95 @@ class LocationTrackerService : Service() {
     }
 
     private fun saveLocationToDatabase(lat: Double, lon: Double) {
-        try {
-            val path = getDatabasePath("life_tracker.db").absolutePath
-            val db = SQLiteDatabase.openDatabase(path, null, SQLiteDatabase.OPEN_READWRITE or SQLiteDatabase.CREATE_IF_NECESSARY)
-            db.enableWriteAheadLogging() // Allows Flutter to read while Kotlin writes
-            
-            // Ensure table exists in case Kotlin runs before Flutter initializes the DB
-            db.execSQL("""
-                CREATE TABLE IF NOT EXISTS pending_points (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    lat REAL NOT NULL,
-                    lon REAL NOT NULL,
-                    recorded_at TEXT NOT NULL
-                )
-            """.trimIndent())
-            
-            // Format time exactly like DateTime.now().toIso8601String()
-            val sdf = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS", Locale.US)
-            sdf.timeZone = TimeZone.getTimeZone("UTC")
-            val now = sdf.format(Date())
-            
-            db.execSQL("INSERT INTO pending_points (lat, lon, recorded_at) VALUES (?, ?, ?)", arrayOf(lat, lon, now))
-            db.close()
-        } catch (e: Exception) {
-            e.printStackTrace()
+        val currentSessionId = activeSessionId ?: return
+        
+        // This pushes the disk I/O off the main UI thread!
+        dbExecutor.execute {
+            val database = db ?: return@execute
+            try {
+                database.beginTransaction()
+                
+                val pointId = UUID.randomUUID().toString()
+                val timestamp = System.currentTimeMillis()
+
+                val values = ContentValues().apply {
+                    put("id", pointId)
+                    put("session_id", currentSessionId)
+                    put("lat", lat)
+                    put("lon", lon)
+                    put("timestamp", timestamp)
+                }
+                database.insert("gps_points", null, values)
+                
+                // Outbox Pattern
+                val outboxValues = ContentValues().apply {
+                    put("event_type", "POINTS_APPEND")
+                    put("payload", "{\"point_id\":\"\$pointId\"}")
+                    put("created_at", timestamp)
+                }
+                database.insert("outbox_events", null, outboxValues)
+                
+                database.setTransactionSuccessful()
+            } catch (e: Exception) {
+                Log.e("LocationTracker", "Failed to save location", e)
+            } finally {
+                database.endTransaction()
+            }
         }
     }
 
-    override fun onDestroy() {
-        super.onDestroy()
-        fusedLocationClient.removeLocationUpdates(locationCallback)
-    }
+    override fun onDestroy() {                                                                                                                 
+        super.onDestroy()                                                                                                                      
+        fusedLocationClient.removeLocationUpdates(locationCallback)                                                                            
+        dbExecutor.shutdown()                                                                                    
+        db?.close()                                                                                                
+        Log.i("LocationTracker", "Service destroyed, DB closed")                                                                               
+    }  
 
     override fun onBind(intent: Intent?): IBinder? = null
+
+    private fun openDatabase() {                                                                                                               
+        try {                                                                                                                                  
+            val dbPath = getDatabasePath("life_tracker_v3.db").absolutePath                                                                       
+            db = SQLiteDatabase.openOrCreateDatabase(dbPath, null)
+            db?.execSQL("PRAGMA foreign_keys=ON;")                                                                                                            
+            
+            db?.execSQL("""                                                                                                                    
+                CREATE TABLE IF NOT EXISTS sessions (
+                    id TEXT PRIMARY KEY,
+                    start_time INTEGER NOT NULL,
+                    end_time INTEGER,
+                    status TEXT NOT NULL,
+                    sync_state TEXT NOT NULL
+                )                                                                                                                             
+            """.trimIndent())
+            
+            db?.execSQL("""                                                                                                                    
+                CREATE TABLE IF NOT EXISTS gps_points (
+                    id TEXT PRIMARY KEY,
+                    session_id TEXT NOT NULL,
+                    lat REAL NOT NULL,
+                    lon REAL NOT NULL,
+                    timestamp INTEGER NOT NULL,
+                    FOREIGN KEY(session_id) REFERENCES sessions(id) ON DELETE CASCADE
+                )                                                                                                                             
+            """.trimIndent())
+            
+            db?.execSQL("""                                                                                                                    
+                CREATE TABLE IF NOT EXISTS outbox_events (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    event_type TEXT NOT NULL,
+                    payload TEXT NOT NULL,
+                    created_at INTEGER NOT NULL,
+                    retry_count INTEGER NOT NULL DEFAULT 0
+                )                                                                                                                             
+            """.trimIndent())
+            
+            Log.i("LocationTracker", "Database opened v2")                                                                                        
+        } catch (e: Exception) {                                                                                                               
+            Log.e("LocationTracker", "Failed to open database", e)                                                                             
+        }                                                                                                                                      
+    }
 
     private fun createNotificationChannel() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {

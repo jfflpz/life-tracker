@@ -2,7 +2,7 @@ import uuid
 from sqlalchemy import Column, String, Float, DateTime, Integer, Date                                                                          
 from sqlalchemy.dialects.postgresql import UUID                                                                                                
 from geoalchemy2 import Geometry                                                                                                               
-from database import Base                                                                                                                      
+from core.database import Base                                                                                                                      
                                                                                                                                                 
 class GPSPoint(Base):                                                                                                                          
     __tablename__ = "gps_points"                                                                                                               

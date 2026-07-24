@@ -14,7 +14,9 @@ class MainActivity: FlutterActivity() {
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, CHANNEL).setMethodCallHandler { call, result ->
             when (call.method) {
                 "startService" -> {
+                    val sessionId = call.argument<String>("sessionId")
                     val intent = Intent(this, LocationTrackerService::class.java)
+                    intent.putExtra("sessionId", sessionId)
                     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                         startForegroundService(intent)
                     } else {

@@ -91,8 +91,8 @@ class _AnimatedLocationLayerState extends State<AnimatedLocationLayer> {
                   point: animatedState.point,
                   radius: animatedState.accuracy,
                   useRadiusInMeter: true,
-                  color: Colors.blue.withOpacity(0.15),
-                  borderColor: Colors.blue.withOpacity(0.3),
+                  color: Colors.blue.withValues(alpha: 0.15),
+                  borderColor: Colors.blue.withValues(alpha: 0.3),
                   borderStrokeWidth: 1.5,
                 ),
               ],
@@ -152,7 +152,7 @@ class NavigationMarkerWidget extends StatelessWidget {
             border: Border.all(color: Colors.white, width: 3),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withOpacity(0.2),
+                color: Colors.black.withValues(alpha: 0.2),
                 blurRadius: 6,
                 spreadRadius: 1,
                 offset: const Offset(0, 3),
@@ -205,8 +205,8 @@ class _ConePainter extends CustomPainter {
           begin: Alignment.bottomCenter,
           end: Alignment.topCenter,
           colors: [
-            Colors.blue.withOpacity(0.4),
-            Colors.blue.withOpacity(0.0),
+            Colors.blue.withValues(alpha: 0.4),
+            Colors.blue.withValues(alpha: 0.0),
           ],
         ).createShader(Rect.fromLTWH(0, 0, size.width, size.height))
         ..style = PaintingStyle.fill,
